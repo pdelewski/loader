@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
 	"go/build"
 	"go/parser"
 	"os"
@@ -26,7 +27,18 @@ func main() {
 	}
 
 	for _, pkg := range prog.AllPackages {
-		fmt.Printf("Package  %q\n", pkg.Pkg.Path())
+
+		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+		for _, file := range pkg.Files {
+			_ = file
+			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			ast.Inspect(file, func(n ast.Node) bool {
+				if funDeclNode, ok := n.(*ast.FuncDecl); ok {
+					fmt.Println("FuncDecl:" + file.Name.Name + "." + funDeclNode.Name.String())
+				}
+				return true
+			})
+		}
 	}
 
 }

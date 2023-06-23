@@ -5,9 +5,11 @@ import (
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"go/types"
 	"golang.org/x/tools/go/loader" //nolint:staticcheck
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 func main() {
@@ -21,10 +23,16 @@ func main() {
 	projectPath := os.Args[1]
 	conf.Build.Dir = filepath.Join(cwd, projectPath)
 	conf.Import(projectPath)
+	ginfo := &types.Info{
+		Defs: make(map[*ast.Ident]types.Object),
+		Uses: make(map[*ast.Ident]types.Object),
+	}
+	var mutex = &sync.RWMutex{}
 	conf.AfterTypeCheck = func(info *loader.PackageInfo, files []*ast.File) {
-		for id, obj := range info.Defs {
-			fmt.Printf("%s: %q defines %v\n",
-				conf.Fset.Position(id.Pos()), id.Name, obj)
+		for k, v := range info.Defs {
+			mutex.Lock()
+			ginfo.Defs[k] = v
+			mutex.Unlock()
 		}
 	}
 	prog, err := conf.Load()
@@ -40,7 +48,7 @@ func main() {
 			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
 			ast.Inspect(file, func(n ast.Node) bool {
 				if funDeclNode, ok := n.(*ast.FuncDecl); ok {
-					fmt.Println("FuncDecl:" + file.Name.Name + "." + funDeclNode.Name.String())
+					fmt.Println("FuncDecl:" + file.Name.Name + "." + funDeclNode.Name.String() + ":" + ginfo.Defs[funDeclNode.Name].Type().String())
 				}
 				return true
 			})

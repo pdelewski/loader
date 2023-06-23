@@ -20,9 +20,13 @@ func main() {
 	projectPath := os.Args[1]
 	conf.Build.Dir = filepath.Join(cwd, projectPath)
 	conf.Import(projectPath)
-	_, err = conf.Load()
+	prog, err := conf.Load()
 	if err != nil {
-	  fmt.Println(err)
+		fmt.Println(err)
+	}
+
+	for _, pkg := range prog.AllPackages {
+		fmt.Printf("Package  %q\n", pkg.Pkg.Path())
 	}
 
 }

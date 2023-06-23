@@ -5,10 +5,10 @@ import (
 	"go/ast"
 	"go/build"
 	"go/parser"
+	"golang.org/x/tools/go/loader" //nolint:staticcheck
 	"os"
 	"path/filepath"
 )
-import "golang.org/x/tools/go/loader" //nolint:staticcheck
 
 func main() {
 	cwd, err := os.Getwd()
@@ -21,6 +21,12 @@ func main() {
 	projectPath := os.Args[1]
 	conf.Build.Dir = filepath.Join(cwd, projectPath)
 	conf.Import(projectPath)
+	conf.AfterTypeCheck = func(info *loader.PackageInfo, files []*ast.File) {
+		for id, obj := range info.Defs {
+			fmt.Printf("%s: %q defines %v\n",
+				conf.Fset.Position(id.Pos()), id.Name, obj)
+		}
+	}
 	prog, err := conf.Load()
 	if err != nil {
 		fmt.Println(err)

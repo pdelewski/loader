@@ -133,20 +133,16 @@ func main() {
 					if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 
 						obj := ginfo.Selections[sel]
+						id := GetMostInnerAstIdent(sel)
 						if obj != nil {
 							recv := obj.Recv()
-							if recv != nil {
-								id := GetMostInnerAstIdent(sel)
-								var ftypeStr string
-								if id != nil {
-									ftype := ginfo.Uses[id]
+							var ftypeStr string
+							ftype := ginfo.Uses[id]
 
-									if ftype != nil {
-										ftypeStr = ftype.Type().String()
-									}
-								}
-								fmt.Println("FuncCall:" + file.Name.Name + "." + recv.String() + "." + obj.Obj().Name() + "." + ftypeStr)
+							if ftype != nil {
+								ftypeStr = ftype.Type().String()
 							}
+							fmt.Println("FuncCall:" + file.Name.Name + "." + recv.String() + "." + obj.Obj().Name() + "." + ftypeStr)
 						}
 					}
 				}

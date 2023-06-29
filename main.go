@@ -32,6 +32,18 @@ func isAny(obj types.Object) bool {
 	return obj.Type().String() == "any" || obj.Type().Underlying().String() == "any"
 }
 
+func getInterfaceNameForReceiver(interfaces map[string]types.Object, recv *types.Var) string {
+	var recvInterface string
+	for _, obj := range interfaces {
+		if t, ok := obj.Type().Underlying().(*types.Interface); ok {
+			if types.Implements(recv.Type(), t) && !isAny(obj) {
+				recvInterface = "." + obj.Type().String()
+			}
+		}
+	}
+	return recvInterface
+}
+
 func main() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -88,13 +100,7 @@ func main() {
 					var recvInterface string
 					if recv != nil {
 						recvStr = "." + recv.Type().String()
-						for _, obj := range interfaces {
-							if t, ok := obj.Type().Underlying().(*types.Interface); ok {
-								if types.Implements(recv.Type(), t) && !isAny(obj) {
-									recvInterface = "." + obj.Type().String()
-								}
-							}
-						}
+						recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 					}
 					if recvInterface != "" {
 						fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())

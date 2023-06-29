@@ -44,6 +44,59 @@ func getInterfaceNameForReceiver(interfaces map[string]types.Object, recv *types
 	return recvInterface
 }
 
+func inspectFile(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object) {
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		if funDeclNode, ok := n.(*ast.FuncDecl); ok {
+			ftype := ginfo.Defs[funDeclNode.Name].Type()
+			signature := ftype.(*types.Signature)
+			recv := signature.Recv()
+
+			var recvStr string
+			var recvInterface string
+			if recv != nil {
+				recvStr = "." + recv.Type().String()
+				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
+			}
+			if recvInterface != "" {
+				fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())
+			}
+			fmt.Println("FuncDecl:" + file.Name.Name + recvStr + "." + funDeclNode.Name.String() + "." + ftype.String())
+
+		}
+		if callExpr, ok := n.(*ast.CallExpr); ok {
+			if id, ok := callExpr.Fun.(*ast.Ident); ok {
+				ftype := ginfo.Uses[id].Type()
+				if ftype != nil {
+					fmt.Println("FuncCall:" + file.Name.Name + "." + id.Name + ":" + ftype.String())
+				}
+			}
+			if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+
+				obj := ginfo.Selections[sel]
+				if obj != nil {
+					recv := obj.Recv()
+					var ftypeStr string
+					// sel.Sel is function ident
+					ftype := ginfo.Uses[sel.Sel]
+
+					if ftype != nil {
+						ftypeStr = ftype.Type().String()
+					}
+					var recvStr string
+					if len(recv.String()) > 0 {
+						recvStr = "." + recv.String()
+					}
+					fmt.Println("FuncCall:" + file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr)
+				}
+			}
+		}
+		return true
+
+	})
+
+}
+
 func main() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -90,54 +143,7 @@ func main() {
 		for _, file := range pkg.Files {
 			_ = file
 			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
-			ast.Inspect(file, func(n ast.Node) bool {
-				if funDeclNode, ok := n.(*ast.FuncDecl); ok {
-					ftype := ginfo.Defs[funDeclNode.Name].Type()
-					signature := ftype.(*types.Signature)
-					recv := signature.Recv()
-
-					var recvStr string
-					var recvInterface string
-					if recv != nil {
-						recvStr = "." + recv.Type().String()
-						recvInterface = getInterfaceNameForReceiver(interfaces, recv)
-					}
-					if recvInterface != "" {
-						fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())
-					}
-					fmt.Println("FuncDecl:" + file.Name.Name + recvStr + "." + funDeclNode.Name.String() + "." + ftype.String())
-
-				}
-				if callExpr, ok := n.(*ast.CallExpr); ok {
-					if id, ok := callExpr.Fun.(*ast.Ident); ok {
-						ftype := ginfo.Uses[id].Type()
-						if ftype != nil {
-							fmt.Println("FuncCall:" + file.Name.Name + "." + id.Name + ":" + ftype.String())
-						}
-					}
-					if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-
-						obj := ginfo.Selections[sel]
-						if obj != nil {
-							recv := obj.Recv()
-							var ftypeStr string
-							// sel.Sel is function ident
-							ftype := ginfo.Uses[sel.Sel]
-
-							if ftype != nil {
-								ftypeStr = ftype.Type().String()
-							}
-							var recvStr string
-							if len(recv.String()) > 0 {
-								recvStr = "." + recv.String()
-							}
-							fmt.Println("FuncCall:" + file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr)
-						}
-					}
-				}
-				return true
-
-			})
+			inspectFile(file, ginfo, interfaces)
 		}
 	}
 

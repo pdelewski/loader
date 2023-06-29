@@ -64,6 +64,22 @@ func GetMostInnerAstIdent(inSel *ast.SelectorExpr) *ast.Ident {
 	return l[0]
 }
 
+func getInterfaces(defs map[*ast.Ident]types.Object) map[string]types.Object {
+	interfaces := make(map[string]types.Object)
+	for id, obj := range defs {
+		if obj == nil || obj.Type() == nil {
+			continue
+		}
+		if _, ok := obj.(*types.TypeName); !ok {
+			continue
+		}
+		if types.IsInterface(obj.Type()) {
+			interfaces[id.Name] = obj
+		}
+	}
+	return interfaces
+}
+
 func main() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -103,6 +119,7 @@ func main() {
 		fmt.Println(err)
 	}
 
+	interfaces := getInterfaces(ginfo.Defs)
 	for _, pkg := range prog.AllPackages {
 
 		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
@@ -116,10 +133,20 @@ func main() {
 					recv := signature.Recv()
 
 					var recvStr string
+					var recvInterface string
 					if recv != nil {
 						recvStr = recv.Type().String()
+						for _, obj := range interfaces {
+							if t, ok := obj.Type().Underlying().(*types.Interface); ok {
+								if types.Implements(recv.Type(), t) && obj.Type().String() != "any" && obj.Type().Underlying().String() != "any" {
+									recvInterface = obj.Type().String()
+								}
+							}
+						}
 					}
-
+					if recvInterface != "" {
+						fmt.Println("FuncDecl:" + file.Name.Name + "." + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())
+					}
 					fmt.Println("FuncDecl:" + file.Name.Name + "." + recvStr + "." + funDeclNode.Name.String() + "." + ftype.String())
 
 				}
@@ -147,6 +174,7 @@ func main() {
 					}
 				}
 				return true
+
 			})
 		}
 	}

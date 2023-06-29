@@ -80,6 +80,10 @@ func getInterfaces(defs map[*ast.Ident]types.Object) map[string]types.Object {
 	return interfaces
 }
 
+func isAny(obj types.Object) bool {
+	return obj.Type().String() == "any" || obj.Type().Underlying().String() == "any"
+}
+
 func main() {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -138,7 +142,7 @@ func main() {
 						recvStr = "." + recv.Type().String()
 						for _, obj := range interfaces {
 							if t, ok := obj.Type().Underlying().(*types.Interface); ok {
-								if types.Implements(recv.Type(), t) && obj.Type().String() != "any" && obj.Type().Underlying().String() != "any" {
+								if types.Implements(recv.Type(), t) && !isAny(obj) {
 									recvInterface = "." + obj.Type().String()
 								}
 							}

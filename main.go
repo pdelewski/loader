@@ -47,8 +47,9 @@ func getInterfaceNameForReceiver(interfaces map[string]types.Object, recv *types
 func inspectFile(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object) {
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		if funDeclNode, ok := n.(*ast.FuncDecl); ok {
-			ftype := ginfo.Defs[funDeclNode.Name].Type()
+		switch node := n.(type) {
+		case *ast.FuncDecl:
+			ftype := ginfo.Defs[node.Name].Type()
 			signature := ftype.(*types.Signature)
 			recv := signature.Recv()
 
@@ -59,26 +60,23 @@ func inspectFile(file *ast.File, ginfo *types.Info, interfaces map[string]types.
 				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
 			if recvInterface != "" {
-				fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())
+				fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + node.Name.String() + "." + ftype.String())
 			}
-			fmt.Println("FuncDecl:" + file.Name.Name + recvStr + "." + funDeclNode.Name.String() + "." + ftype.String())
-
-		}
-		if callExpr, ok := n.(*ast.CallExpr); ok {
-			if id, ok := callExpr.Fun.(*ast.Ident); ok {
-				ftype := ginfo.Uses[id].Type()
+			fmt.Println("FuncDecl:" + file.Name.Name + recvStr + "." + node.Name.String() + "." + ftype.String())
+		case *ast.CallExpr:
+			switch node := node.Fun.(type) {
+			case *ast.Ident:
+				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
-					fmt.Println("FuncCall:" + file.Name.Name + "." + id.Name + ":" + ftype.String())
+					fmt.Println("FuncCall:" + file.Name.Name + "." + node.Name + ":" + ftype.String())
 				}
-			}
-			if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-
-				obj := ginfo.Selections[sel]
+			case *ast.SelectorExpr:
+				obj := ginfo.Selections[node]
 				if obj != nil {
 					recv := obj.Recv()
 					var ftypeStr string
 					// sel.Sel is function ident
-					ftype := ginfo.Uses[sel.Sel]
+					ftype := ginfo.Uses[node.Sel]
 
 					if ftype != nil {
 						ftypeStr = ftype.Type().String()
@@ -89,6 +87,7 @@ func inspectFile(file *ast.File, ginfo *types.Info, interfaces map[string]types.
 					}
 					fmt.Println("FuncCall:" + file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr)
 				}
+
 			}
 		}
 		return true

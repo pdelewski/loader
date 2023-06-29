@@ -135,19 +135,19 @@ func main() {
 					var recvStr string
 					var recvInterface string
 					if recv != nil {
-						recvStr = recv.Type().String()
+						recvStr = "." + recv.Type().String()
 						for _, obj := range interfaces {
 							if t, ok := obj.Type().Underlying().(*types.Interface); ok {
 								if types.Implements(recv.Type(), t) && obj.Type().String() != "any" && obj.Type().Underlying().String() != "any" {
-									recvInterface = obj.Type().String()
+									recvInterface = "." + obj.Type().String()
 								}
 							}
 						}
 					}
 					if recvInterface != "" {
-						fmt.Println("FuncDecl:" + file.Name.Name + "." + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())
+						fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + funDeclNode.Name.String() + "." + ftype.String())
 					}
-					fmt.Println("FuncDecl:" + file.Name.Name + "." + recvStr + "." + funDeclNode.Name.String() + "." + ftype.String())
+					fmt.Println("FuncDecl:" + file.Name.Name + recvStr + "." + funDeclNode.Name.String() + "." + ftype.String())
 
 				}
 				if callExpr, ok := n.(*ast.CallExpr); ok {
@@ -169,7 +169,11 @@ func main() {
 							if ftype != nil {
 								ftypeStr = ftype.Type().String()
 							}
-							fmt.Println("FuncCall:" + file.Name.Name + "." + recv.String() + "." + obj.Obj().Name() + "." + ftypeStr)
+							var recvStr string
+							if len(recv.String()) > 0 {
+								recvStr = "." + recv.String()
+							}
+							fmt.Println("FuncCall:" + file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr)
 						}
 					}
 				}

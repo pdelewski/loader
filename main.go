@@ -85,9 +85,16 @@ func dumpFuncDecls(funcDecls map[string]bool) {
 	}
 }
 
+func addFuncCallToCallGraph(funcCall string, currentFun string, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
+	if !Contains(backwardCallGraph[funcCall], currentFun) {
+		if funcDecls[funcCall] {
+			backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
+		}
+	}
+}
+
 func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
 	currentFun := ""
-	_ = currentFun
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
@@ -108,11 +115,7 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
 					funcCall := file.Name.Name + "." + node.Name + "." + ftype.String()
-					if !Contains(backwardCallGraph[funcCall], currentFun) {
-						if funcDecls[funcCall] {
-							backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
-						}
-					}
+					addFuncCallToCallGraph(funcCall, currentFun, funcDecls, backwardCallGraph)
 				}
 			case *ast.SelectorExpr:
 				obj := ginfo.Selections[node]
@@ -130,11 +133,7 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 						recvStr = "." + recv.String()
 					}
 					funcCall := file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr
-					if !Contains(backwardCallGraph[funcCall], currentFun) {
-						if funcDecls[funcCall] {
-							backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
-						}
-					}
+					addFuncCallToCallGraph(funcCall, currentFun, funcDecls, backwardCallGraph)
 				}
 
 			}
@@ -142,7 +141,6 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 		return true
 
 	})
-
 }
 
 func dumpCallGraph(backwardCallGraph map[string][]string) {

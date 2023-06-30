@@ -101,7 +101,6 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 				recvStr = "." + recv.Type().String()
 				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
-			fmt.Println("FuncDecl:" + file.Name.Name + recvStr + recvInterface + "." + node.Name.String() + "." + ftype.String())
 			currentFun = file.Name.Name + recvStr + recvInterface + "." + node.Name.String() + "." + ftype.String()
 		case *ast.CallExpr:
 			switch node := node.Fun.(type) {
@@ -109,7 +108,6 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
 					funcCall := file.Name.Name + "." + node.Name + "." + ftype.String()
-					fmt.Println("FuncCall:", funcCall)
 					if !Contains(backwardCallGraph[funcCall], currentFun) {
 						if funcDecls[funcCall] {
 							backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
@@ -132,7 +130,6 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 						recvStr = "." + recv.String()
 					}
 					funcCall := file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr
-					fmt.Println("FuncCall:", funcCall)
 					if !Contains(backwardCallGraph[funcCall], currentFun) {
 						if funcDecls[funcCall] {
 							backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)

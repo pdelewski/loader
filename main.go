@@ -108,7 +108,13 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 			case *ast.Ident:
 				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
-					fmt.Println("FuncCall:" + file.Name.Name + "." + node.Name + ":" + ftype.String())
+					funcCall := file.Name.Name + "." + node.Name + ":" + ftype.String()
+					fmt.Println("FuncCall:", funcCall)
+					if !Contains(backwardCallGraph[funcCall], currentFun) {
+						if funcDecls[funcCall] {
+							backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
+						}
+					}
 				}
 			case *ast.SelectorExpr:
 				obj := ginfo.Selections[node]
@@ -125,7 +131,13 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 					if len(recv.String()) > 0 {
 						recvStr = "." + recv.String()
 					}
-					fmt.Println("FuncCall:" + file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr)
+					funcCall := file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr
+					fmt.Println("FuncCall:", funcCall)
+					if !Contains(backwardCallGraph[funcCall], currentFun) {
+						if funcDecls[funcCall] {
+							backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
+						}
+					}
 				}
 
 			}
@@ -134,6 +146,14 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 
 	})
 
+}
+
+func dumpCallGraph(backwardCallGraph map[string][]string) {
+	fmt.Println("\n\tchild parent")
+	for k, v := range backwardCallGraph {
+		fmt.Print("\n\t", k)
+		fmt.Print(" ", v)
+	}
 }
 
 func main() {
@@ -178,19 +198,19 @@ func main() {
 	backwardCallGraph := make(map[string][]string)
 	_ = backwardCallGraph
 	interfaces := getInterfaces(ginfo.Defs)
-	/*
-	           for _, pkg := range prog.AllPackages {
 
-	                   fmt.Printf("Package path %q\n", pkg.Pkg.Path())
-	                   for _, file := range pkg.Files {
-	                           _ = file
-	                           fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
-	                           findFuncDecls(file, ginfo, interfaces, funcDecls)
-	                   }
-	           }
+	for _, pkg := range prog.AllPackages {
 
-	           dumpFuncDecls(funcDecls)
-	*/
+		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+		for _, file := range pkg.Files {
+			_ = file
+			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			findFuncDecls(file, ginfo, interfaces, funcDecls)
+		}
+	}
+
+	dumpFuncDecls(funcDecls)
+
 	for _, pkg := range prog.AllPackages {
 
 		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
@@ -200,5 +220,5 @@ func main() {
 			buildCallGraph(file, ginfo, interfaces, funcDecls, backwardCallGraph)
 		}
 	}
-
+	dumpCallGraph(backwardCallGraph)
 }

@@ -108,7 +108,7 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 			case *ast.Ident:
 				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
-					funcCall := file.Name.Name + "." + node.Name + ":" + ftype.String()
+					funcCall := file.Name.Name + "." + node.Name + "." + ftype.String()
 					fmt.Println("FuncCall:", funcCall)
 					if !Contains(backwardCallGraph[funcCall], currentFun) {
 						if funcDecls[funcCall] {

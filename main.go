@@ -9,6 +9,7 @@ import (
 	"golang.org/x/tools/go/loader" //nolint:staticcheck
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -87,7 +88,9 @@ func dumpFuncDecls(funcDecls map[string]bool) {
 
 func addFuncCallToCallGraph(funcCall string, currentFun string, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
 	if !Contains(backwardCallGraph[funcCall], currentFun) {
-		backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
+		if funcDecls[funcCall] {
+			backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
+		}
 	}
 }
 
@@ -150,7 +153,22 @@ func dumpCallGraph(backwardCallGraph map[string][]string) {
 	fmt.Print("\n")
 }
 
+func usage() {
+	fmt.Println("usage loader [main package path] [allowed path pattern]")
+}
+
 func main() {
+	if len(os.Args) < 2 {
+		usage()
+		return
+	}
+
+	var allowedPathPattern string
+
+	if len(os.Args) == 3 {
+		allowedPathPattern = os.Args[2]
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return
@@ -196,7 +214,20 @@ func main() {
 
 		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
 		for _, file := range pkg.Files {
-			_ = file
+			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
+				continue
+			}
+			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			findFuncDecls(file, ginfo, interfaces, funcDecls)
+		}
+	}
+
+	for _, pkg := range prog.AllPackages {
+		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+		for _, file := range pkg.Files {
+			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
+				continue
+			}
 			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
 			buildCallGraph(file, ginfo, interfaces, funcDecls, backwardCallGraph)
 		}

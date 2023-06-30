@@ -87,9 +87,7 @@ func dumpFuncDecls(funcDecls map[string]bool) {
 
 func addFuncCallToCallGraph(funcCall string, currentFun string, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
 	if !Contains(backwardCallGraph[funcCall], currentFun) {
-		if funcDecls[funcCall] {
-			backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
-		}
+		backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
 	}
 }
 
@@ -149,6 +147,7 @@ func dumpCallGraph(backwardCallGraph map[string][]string) {
 		fmt.Print("\n\t", k)
 		fmt.Print(" ", v)
 	}
+	fmt.Print("\n")
 }
 
 func main() {
@@ -191,20 +190,7 @@ func main() {
 	}
 	funcDecls := make(map[string]bool)
 	backwardCallGraph := make(map[string][]string)
-	_ = backwardCallGraph
 	interfaces := getInterfaces(ginfo.Defs)
-
-	for _, pkg := range prog.AllPackages {
-
-		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
-		for _, file := range pkg.Files {
-			_ = file
-			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
-			findFuncDecls(file, ginfo, interfaces, funcDecls)
-		}
-	}
-
-	dumpFuncDecls(funcDecls)
 
 	for _, pkg := range prog.AllPackages {
 
@@ -216,4 +202,5 @@ func main() {
 		}
 	}
 	dumpCallGraph(backwardCallGraph)
+	fmt.Println("Callgraph:", len(backwardCallGraph))
 }

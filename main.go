@@ -12,6 +12,15 @@ import (
 	"sync"
 )
 
+func Contains(a []string, x string) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
+
 func getInterfaces(defs map[*ast.Ident]types.Object) map[string]types.Object {
 	interfaces := make(map[string]types.Object)
 	for id, obj := range defs {
@@ -44,8 +53,7 @@ func getInterfaceNameForReceiver(interfaces map[string]types.Object, recv *types
 	return recvInterface
 }
 
-func inspectFile(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object) {
-
+func findFuncDecls(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[string]bool) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
@@ -60,9 +68,41 @@ func inspectFile(file *ast.File, ginfo *types.Info, interfaces map[string]types.
 				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
 			if recvInterface != "" {
-				fmt.Println("FuncDecl:" + file.Name.Name + recvInterface + "." + node.Name.String() + "." + ftype.String())
+				funcDecl := file.Name.Name + recvInterface + "." + node.Name.String() + "." + ftype.String()
+				funcDecls[funcDecl] = true
 			}
-			fmt.Println("FuncDecl:" + file.Name.Name + recvStr + "." + node.Name.String() + "." + ftype.String())
+			funcDecl := file.Name.Name + recvStr + "." + node.Name.String() + "." + ftype.String()
+			funcDecls[funcDecl] = true
+		}
+		return true
+	})
+}
+
+func dumpFuncDecls(funcDecls map[string]bool) {
+	fmt.Println("FuncDecls")
+	for fun, _ := range funcDecls {
+		fmt.Println(fun)
+	}
+}
+
+func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
+	currentFun := ""
+	_ = currentFun
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.FuncDecl:
+			ftype := ginfo.Defs[node.Name].Type()
+			signature := ftype.(*types.Signature)
+			recv := signature.Recv()
+
+			var recvStr string
+			var recvInterface string
+			if recv != nil {
+				recvStr = "." + recv.Type().String()
+				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
+			}
+			fmt.Println("FuncDecl:" + file.Name.Name + recvStr + recvInterface + "." + node.Name.String() + "." + ftype.String())
+			currentFun = file.Name.Name + recvStr + recvInterface + "." + node.Name.String() + "." + ftype.String()
 		case *ast.CallExpr:
 			switch node := node.Fun.(type) {
 			case *ast.Ident:
@@ -134,15 +174,30 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
+	funcDecls := make(map[string]bool)
+	backwardCallGraph := make(map[string][]string)
+	_ = backwardCallGraph
 	interfaces := getInterfaces(ginfo.Defs)
+	/*
+	           for _, pkg := range prog.AllPackages {
+
+	                   fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+	                   for _, file := range pkg.Files {
+	                           _ = file
+	                           fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+	                           findFuncDecls(file, ginfo, interfaces, funcDecls)
+	                   }
+	           }
+
+	           dumpFuncDecls(funcDecls)
+	*/
 	for _, pkg := range prog.AllPackages {
 
 		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
 		for _, file := range pkg.Files {
 			_ = file
 			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
-			inspectFile(file, ginfo, interfaces)
+			buildCallGraph(file, ginfo, interfaces, funcDecls, backwardCallGraph)
 		}
 	}
 

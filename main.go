@@ -13,6 +13,14 @@ import (
 	"sync"
 )
 
+type FuncDescriptor struct {
+	PackageName  string
+	Receiver     string
+	Interface    string
+	FunctionName string
+	FuncType     string
+}
+
 func Contains(a []string, x string) bool {
 	for _, n := range a {
 		if x == n {

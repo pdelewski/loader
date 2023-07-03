@@ -21,9 +21,18 @@ type FuncDescriptor struct {
 	FuncType     string
 }
 
-func Contains(a []string, x string) bool {
+func (fd FuncDescriptor) Id() string {
+	recvStr := fd.Receiver
+	if len(recvStr) > 0 && len(fd.Interface) > 0 {
+		recvStr = "." + recvStr + "|"
+	}
+	recvStr = recvStr + fd.Interface
+	return fd.PackageName + recvStr + "." + fd.FunctionName + "." + fd.FuncType
+}
+
+func Contains(a []FuncDescriptor, x FuncDescriptor) bool {
 	for _, n := range a {
-		if x == n {
+		if x.Id() == n.Id() {
 			return true
 		}
 	}
@@ -62,7 +71,7 @@ func getInterfaceNameForReceiver(interfaces map[string]types.Object, recv *types
 	return recvInterface
 }
 
-func findFuncDecls(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[string]bool) {
+func findFuncDecls(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[FuncDescriptor]bool) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
@@ -77,10 +86,10 @@ func findFuncDecls(file *ast.File, ginfo *types.Info, interfaces map[string]type
 				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
 			if recvInterface != "" {
-				funcDecl := file.Name.Name + recvInterface + "." + node.Name.String() + "." + ftype.String()
+				funcDecl := FuncDescriptor{file.Name.Name, "", recvInterface, node.Name.String(), ftype.String()}
 				funcDecls[funcDecl] = true
 			}
-			funcDecl := file.Name.Name + recvStr + "." + node.Name.String() + "." + ftype.String()
+			funcDecl := FuncDescriptor{file.Name.Name, recvStr, recvInterface, node.Name.String(), ftype.String()}
 			funcDecls[funcDecl] = true
 		}
 		return true
@@ -94,7 +103,8 @@ func dumpFuncDecls(funcDecls map[string]bool) {
 	}
 }
 
-func addFuncCallToCallGraph(funcCall string, currentFun string, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
+func addFuncCallToCallGraph(funcCall FuncDescriptor, currentFun FuncDescriptor,
+	funcDecls map[FuncDescriptor]bool, backwardCallGraph map[FuncDescriptor][]FuncDescriptor) {
 	if !Contains(backwardCallGraph[funcCall], currentFun) {
 		if funcDecls[funcCall] {
 			backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
@@ -102,8 +112,10 @@ func addFuncCallToCallGraph(funcCall string, currentFun string, funcDecls map[st
 	}
 }
 
-func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[string]bool, backwardCallGraph map[string][]string) {
-	currentFun := ""
+func buildCallGraph(file *ast.File, ginfo *types.Info,
+	interfaces map[string]types.Object, funcDecls map[FuncDescriptor]bool,
+	backwardCallGraph map[FuncDescriptor][]FuncDescriptor) {
+	currentFun := FuncDescriptor{}
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
@@ -117,13 +129,13 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 				recvStr = "." + recv.Type().String()
 				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
-			currentFun = file.Name.Name + recvStr + recvInterface + "." + node.Name.String() + "." + ftype.String()
+			currentFun = FuncDescriptor{file.Name.Name, recvStr, recvInterface, node.Name.String(), ftype.String()}
 		case *ast.CallExpr:
 			switch node := node.Fun.(type) {
 			case *ast.Ident:
 				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
-					funcCall := file.Name.Name + "." + node.Name + "." + ftype.String()
+					funcCall := FuncDescriptor{file.Name.Name, "", "", node.Name, ftype.String()}
 					addFuncCallToCallGraph(funcCall, currentFun, funcDecls, backwardCallGraph)
 				}
 			case *ast.SelectorExpr:
@@ -141,7 +153,7 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 					if len(recv.String()) > 0 {
 						recvStr = "." + recv.String()
 					}
-					funcCall := file.Name.Name + recvStr + "." + obj.Obj().Name() + "." + ftypeStr
+					funcCall := FuncDescriptor{file.Name.Name, recvStr, "", obj.Obj().Name(), ftypeStr}
 					addFuncCallToCallGraph(funcCall, currentFun, funcDecls, backwardCallGraph)
 				}
 
@@ -152,10 +164,10 @@ func buildCallGraph(file *ast.File, ginfo *types.Info, interfaces map[string]typ
 	})
 }
 
-func dumpCallGraph(backwardCallGraph map[string][]string) {
+func dumpCallGraph(backwardCallGraph map[FuncDescriptor][]FuncDescriptor) {
 	fmt.Println("\n\tchild parent")
 	for k, v := range backwardCallGraph {
-		fmt.Print("\n\t", k)
+		fmt.Print("\n\t", k.Id())
 		fmt.Print(" ", v)
 	}
 	fmt.Print("\n")
@@ -214,8 +226,8 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	funcDecls := make(map[string]bool)
-	backwardCallGraph := make(map[string][]string)
+	funcDecls := make(map[FuncDescriptor]bool)
+	backwardCallGraph := make(map[FuncDescriptor][]FuncDescriptor)
 	interfaces := getInterfaces(ginfo.Defs)
 
 	for _, pkg := range prog.AllPackages {

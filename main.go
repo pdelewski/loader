@@ -16,17 +16,12 @@ import (
 type FuncDescriptor struct {
 	PackageName  string
 	Receiver     string
-	Interface    string
 	FunctionName string
 	FuncType     string
 }
 
 func (fd FuncDescriptor) Id() string {
 	recvStr := fd.Receiver
-	if len(recvStr) > 0 && len(fd.Interface) > 0 {
-		recvStr = "." + recvStr + "|"
-	}
-	recvStr = recvStr + fd.Interface
 	return fd.PackageName + recvStr + "." + fd.FunctionName + "." + fd.FuncType
 }
 
@@ -86,17 +81,17 @@ func findFuncDecls(file *ast.File, ginfo *types.Info, interfaces map[string]type
 				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
 			if recvInterface != "" {
-				funcDecl := FuncDescriptor{file.Name.Name, "", recvInterface, node.Name.String(), ftype.String()}
+				funcDecl := FuncDescriptor{file.Name.Name, recvInterface, node.Name.String(), ftype.String()}
 				funcDecls[funcDecl] = true
 			}
-			funcDecl := FuncDescriptor{file.Name.Name, recvStr, recvInterface, node.Name.String(), ftype.String()}
+			funcDecl := FuncDescriptor{file.Name.Name, recvStr, node.Name.String(), ftype.String()}
 			funcDecls[funcDecl] = true
 		}
 		return true
 	})
 }
 
-func dumpFuncDecls(funcDecls map[string]bool) {
+func dumpFuncDecls(funcDecls map[FuncDescriptor]bool) {
 	fmt.Println("FuncDecls")
 	for fun, _ := range funcDecls {
 		fmt.Println(fun)
@@ -106,7 +101,7 @@ func dumpFuncDecls(funcDecls map[string]bool) {
 func addFuncCallToCallGraph(funcCall FuncDescriptor, currentFun FuncDescriptor,
 	funcDecls map[FuncDescriptor]bool, backwardCallGraph map[FuncDescriptor][]FuncDescriptor) {
 	if !Contains(backwardCallGraph[funcCall], currentFun) {
-		if funcDecls[funcCall] {
+		if _, ok := funcDecls[funcCall]; ok {
 			backwardCallGraph[funcCall] = append(backwardCallGraph[funcCall], currentFun)
 		}
 	}
@@ -124,18 +119,16 @@ func buildCallGraph(file *ast.File, ginfo *types.Info,
 			recv := signature.Recv()
 
 			var recvStr string
-			var recvInterface string
 			if recv != nil {
 				recvStr = "." + recv.Type().String()
-				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
 			}
-			currentFun = FuncDescriptor{file.Name.Name, recvStr, recvInterface, node.Name.String(), ftype.String()}
+			currentFun = FuncDescriptor{file.Name.Name, recvStr, node.Name.String(), ftype.String()}
 		case *ast.CallExpr:
 			switch node := node.Fun.(type) {
 			case *ast.Ident:
 				ftype := ginfo.Uses[node].Type()
 				if ftype != nil {
-					funcCall := FuncDescriptor{file.Name.Name, "", "", node.Name, ftype.String()}
+					funcCall := FuncDescriptor{file.Name.Name, "", node.Name, ftype.String()}
 					addFuncCallToCallGraph(funcCall, currentFun, funcDecls, backwardCallGraph)
 				}
 			case *ast.SelectorExpr:
@@ -153,8 +146,47 @@ func buildCallGraph(file *ast.File, ginfo *types.Info,
 					if len(recv.String()) > 0 {
 						recvStr = "." + recv.String()
 					}
-					funcCall := FuncDescriptor{file.Name.Name, recvStr, "", obj.Obj().Name(), ftypeStr}
+
+					funcCall := FuncDescriptor{file.Name.Name, recvStr, obj.Obj().Name(), ftypeStr}
 					addFuncCallToCallGraph(funcCall, currentFun, funcDecls, backwardCallGraph)
+				}
+
+			}
+		}
+		return true
+
+	})
+}
+
+func dumpFuncCalls(file *ast.File, ginfo *types.Info) {
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.CallExpr:
+			switch node := node.Fun.(type) {
+			case *ast.Ident:
+				ftype := ginfo.Uses[node].Type()
+				if ftype != nil {
+					funcCall := FuncDescriptor{file.Name.Name, "", node.Name, ftype.String()}
+					fmt.Println("FuncCall:", funcCall)
+				}
+			case *ast.SelectorExpr:
+				obj := ginfo.Selections[node]
+				if obj != nil {
+					recv := obj.Recv()
+					var ftypeStr string
+					// sel.Sel is function ident
+					ftype := ginfo.Uses[node.Sel]
+
+					if ftype != nil {
+						ftypeStr = ftype.Type().String()
+					}
+					var recvStr string
+					if len(recv.String()) > 0 {
+						recvStr = "." + recv.String()
+					}
+
+					funcCall := FuncDescriptor{file.Name.Name, recvStr, obj.Obj().Name(), ftypeStr}
+					fmt.Println("FuncCall:", funcCall)
 				}
 
 			}
@@ -242,6 +274,8 @@ func main() {
 		}
 	}
 
+	dumpFuncDecls(funcDecls)
+
 	for _, pkg := range prog.AllPackages {
 		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
 		for _, file := range pkg.Files {
@@ -249,6 +283,7 @@ func main() {
 				continue
 			}
 			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			dumpFuncCalls(file, ginfo)
 			buildCallGraph(file, ginfo, interfaces, funcDecls, backwardCallGraph)
 		}
 	}

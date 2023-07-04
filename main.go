@@ -66,6 +66,40 @@ func getInterfaceNameForReceiver(interfaces map[string]types.Object, recv *types
 	return recvInterface
 }
 
+func findRootFunctions(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, functionLabel string, rootFunctions *[]FuncDescriptor) {
+	var currentFun FuncDescriptor
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.FuncDecl:
+			ftype := ginfo.Defs[node.Name].Type()
+			signature := ftype.(*types.Signature)
+			recv := signature.Recv()
+
+			var recvStr string
+			var recvInterface string
+			if recv != nil {
+				recvStr = "." + recv.Type().String()
+				recvInterface = getInterfaceNameForReceiver(interfaces, recv)
+			}
+			if recvInterface != "" {
+				currentFun = FuncDescriptor{file.Name.Name, recvInterface, node.Name.String(), ftype.String()}
+			} else {
+				currentFun = FuncDescriptor{file.Name.Name, recvStr, node.Name.String(), ftype.String()}
+			}
+
+		case *ast.CallExpr:
+			selector, ok := node.Fun.(*ast.SelectorExpr)
+			if ok {
+				if selector.Sel.Name == functionLabel {
+					fmt.Println("sel:", selector.Sel.Name, currentFun)
+					*rootFunctions = append(*rootFunctions, currentFun)
+				}
+			}
+		}
+		return true
+	})
+}
+
 func findFuncDecls(file *ast.File, ginfo *types.Info, interfaces map[string]types.Object, funcDecls map[FuncDescriptor]bool) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
@@ -205,6 +239,54 @@ func dumpCallGraph(backwardCallGraph map[FuncDescriptor][]FuncDescriptor) {
 	fmt.Print("\n")
 }
 
+func FindRootFunctions(prog *loader.Program, ginfo *types.Info, interfaces map[string]types.Object, allowedPathPattern string) []FuncDescriptor {
+	var rootFunctions []FuncDescriptor
+	for _, pkg := range prog.AllPackages {
+
+		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+		for _, file := range pkg.Files {
+			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
+				continue
+			}
+			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			findRootFunctions(file, ginfo, interfaces, "AutotelEntryPoint", &rootFunctions)
+		}
+	}
+	return rootFunctions
+}
+
+func FindFuncDecls(prog *loader.Program, ginfo *types.Info, interfaces map[string]types.Object, allowedPathPattern string) map[FuncDescriptor]bool {
+	funcDecls := make(map[FuncDescriptor]bool)
+	for _, pkg := range prog.AllPackages {
+
+		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+		for _, file := range pkg.Files {
+			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
+				continue
+			}
+			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			findFuncDecls(file, ginfo, interfaces, funcDecls)
+		}
+	}
+	return funcDecls
+}
+
+func BuildCallGraph(prog *loader.Program, ginfo *types.Info,
+	interfaces map[string]types.Object, funcDecls map[FuncDescriptor]bool, allowedPathPattern string) map[FuncDescriptor][]FuncDescriptor {
+	backwardCallGraph := make(map[FuncDescriptor][]FuncDescriptor)
+	for _, pkg := range prog.AllPackages {
+		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
+		for _, file := range pkg.Files {
+			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
+				continue
+			}
+			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
+			buildCallGraph(file, ginfo, interfaces, funcDecls, backwardCallGraph)
+		}
+	}
+	return backwardCallGraph
+}
+
 func usage() {
 	fmt.Println("usage loader [main package path] [allowed path pattern]")
 }
@@ -258,35 +340,14 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	funcDecls := make(map[FuncDescriptor]bool)
-	backwardCallGraph := make(map[FuncDescriptor][]FuncDescriptor)
 	interfaces := getInterfaces(ginfo.Defs)
 
-	for _, pkg := range prog.AllPackages {
+	rootFunctions := FindRootFunctions(prog, ginfo, interfaces, allowedPathPattern)
+	funcDecls := FindFuncDecls(prog, ginfo, interfaces, allowedPathPattern)
+	backwardCallGraph := BuildCallGraph(prog, ginfo, interfaces, funcDecls, allowedPathPattern)
 
-		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
-		for _, file := range pkg.Files {
-			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
-				continue
-			}
-			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
-			findFuncDecls(file, ginfo, interfaces, funcDecls)
-		}
-	}
-
+	fmt.Println("RootFunctions: ", rootFunctions)
 	dumpFuncDecls(funcDecls)
-
-	for _, pkg := range prog.AllPackages {
-		fmt.Printf("Package path %q\n", pkg.Pkg.Path())
-		for _, file := range pkg.Files {
-			if allowedPathPattern != "" && !strings.Contains(prog.Fset.Position(file.Name.Pos()).String(), allowedPathPattern) {
-				continue
-			}
-			fmt.Println(prog.Fset.Position(file.Name.Pos()).String())
-			dumpFuncCalls(file, ginfo)
-			buildCallGraph(file, ginfo, interfaces, funcDecls, backwardCallGraph)
-		}
-	}
 	dumpCallGraph(backwardCallGraph)
 	fmt.Println("Callgraph:", len(backwardCallGraph))
 }

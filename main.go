@@ -34,7 +34,7 @@ func Contains(a []FuncDescriptor, x FuncDescriptor) bool {
 	return false
 }
 
-func getInterfaces(defs map[*ast.Ident]types.Object) map[string]types.Object {
+func GetInterfaces(defs map[*ast.Ident]types.Object) map[string]types.Object {
 	interfaces := make(map[string]types.Object)
 	for id, obj := range defs {
 		if obj == nil || obj.Type() == nil {
@@ -346,7 +346,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	interfaces := getInterfaces(ginfo.Defs)
+	interfaces := GetInterfaces(ginfo.Defs)
 
 	rootFunctions := FindRootFunctions(prog, ginfo, interfaces, allowedPathPattern)
 	funcDecls := FindFuncDecls(prog, ginfo, interfaces, allowedPathPattern)

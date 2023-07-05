@@ -291,33 +291,16 @@ func usage() {
 	fmt.Println("usage loader [main package path] [allowed path pattern]")
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		usage()
-		return
-	}
-
-	var allowedPathPattern string
-
-	if len(os.Args) == 3 {
-		allowedPathPattern = os.Args[2]
-	}
-
+func LoadProgram(projectPath string, ginfo *types.Info) (*loader.Program, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return
+		return nil, err
 	}
 	conf := loader.Config{ParserMode: parser.ParseComments}
 	conf.Build = &build.Default
 	conf.Build.CgoEnabled = false
-	projectPath := os.Args[1]
 	conf.Build.Dir = filepath.Join(cwd, projectPath)
 	conf.Import(projectPath)
-	ginfo := &types.Info{
-		Defs:       make(map[*ast.Ident]types.Object),
-		Uses:       make(map[*ast.Ident]types.Object),
-		Selections: make(map[*ast.SelectorExpr]*types.Selection),
-	}
 	var mutex = &sync.RWMutex{}
 	conf.AfterTypeCheck = func(info *loader.PackageInfo, files []*ast.File) {
 		for k, v := range info.Defs {
@@ -336,10 +319,33 @@ func main() {
 			mutex.Unlock()
 		}
 	}
-	prog, err := conf.Load()
+	return conf.Load()
+
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		usage()
+		return
+	}
+
+	var allowedPathPattern string
+
+	if len(os.Args) == 3 {
+		allowedPathPattern = os.Args[2]
+	}
+
+	ginfo := &types.Info{
+		Defs:       make(map[*ast.Ident]types.Object),
+		Uses:       make(map[*ast.Ident]types.Object),
+		Selections: make(map[*ast.SelectorExpr]*types.Selection),
+	}
+
+	prog, err := LoadProgram(os.Args[1], ginfo)
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	interfaces := getInterfaces(ginfo.Defs)
 
 	rootFunctions := FindRootFunctions(prog, ginfo, interfaces, allowedPathPattern)
